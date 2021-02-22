@@ -1,7 +1,16 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(cppbridge)
 
-find_package(catkin REQUIRED COMPONENTS roscpp)
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  dbw_mkz_msgs
+  geometry_msgs
+  roscpp
+  rospy
+  sensor_msgs
+  std_msgs
+  cv_bridge
+)
 
 include_directories(${catkin_INCLUDE_DIRS})
 include_directories(/usr/local/include)
