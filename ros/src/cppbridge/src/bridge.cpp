@@ -65,12 +65,23 @@ static constexpr auto MSG_IMAGE         = "image";
       {'topic': '/image_color', 'type': 'image', 'name': 'image'},
   ]
 */
+
+/*
+  self.callbacks = {
+      '/vehicle/steering_cmd': self.callback_steering,
+      '/vehicle/throttle_cmd': self.callback_throttle,
+      '/vehicle/brake_cmd': self.callback_brake,
+  '/final_waypoints': self.callback_path
+  }
+*/
 // From telemetry package
 static constexpr auto PUBNAME_DBW_STATUS = "/vehicle/dbw_enabled";
 static constexpr auto PUBNAME_VELOCITY   = "/current_velocity";
 static constexpr auto PUBNAME_POSE       = "/current_pose";
 
 static constexpr auto MSG_QUEUE_SIZE = 20;
+
+static constexpr auto SUBNAME_STEERING = "/vehicle/steering_cmd";
 
 static std_msgs::Bool to_dbw_status(const nlohmann::json &data)
 {
@@ -111,10 +122,6 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "simulator_bridge");
   ros::NodeHandle n;
 
-  ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", MSG_QUEUE_SIZE);
-
-  // bridge.publish_dbw_status(dbw_enable)
-  // bridge.publish_odometry(data)
   ros::Publisher dbw_status_pub = n.advertise<std_msgs::Bool>(PUBNAME_DBW_STATUS, MSG_QUEUE_SIZE);
   ros::Publisher pose_pub = n.advertise<geometry_msgs::PoseStamped>(PUBNAME_POSE, MSG_QUEUE_SIZE);
   ros::Publisher velocity_pub =
@@ -154,24 +161,20 @@ int main(int argc, char **argv)
 
       auto velocity_msg = to_velocity(j[1]);
       velocity_pub.publish(velocity_msg);
-//      std_msgs::String pub_msg;
-
-//      pub_msg.data = s;
-
-//      dbw_mkz_msgs::SteeringReport steer_rep;
-//      steer_rep.enabled              = true;
-//      steer_rep.steering_wheel_angle = 0.666;
-
-//      steer_pub.publish(steer_rep);
     }
 
     json msgJson;
-    msgJson["steering_angle"] = 1.;
-    msgJson["throttle"]       = 1.;
-    // auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-    auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-    ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-    std::cout << "Responce:\n" << msg << std::endl;
+    msgJson["steering_angle"] = "1.0";
+    msgJson["throttle"]       = "0.5";
+    msgJson["brake"]       = "0.0";
+
+    auto msg1 = "42[\"steer\"," + msgJson.dump() + "]";
+    ws.send(msg1.data(), msg1.length(), uWS::OpCode::TEXT);
+    auto msg2 = "42[\"throttle\"," + msgJson.dump() + "]";
+    ws.send(msg2.data(), msg2.length(), uWS::OpCode::TEXT);
+    auto msg3 = "42[\"brake\"," + msgJson.dump() + "]";
+    ws.send(msg3.data(), msg3.length(), uWS::OpCode::TEXT);
+
   });  // end h.onMessage
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
