@@ -12,6 +12,14 @@ static constexpr auto SUBNAME_WAYPOINTS = "/final_waypoints";
 
 static constexpr auto MSG_QUEUE_SIZE = 20;
 
+static styx_msgs::Lane
+    lane_buf;  // Workaround! BUt better that passing of member method as a callback.
+
+void wpts_callback(styx_msgs::Lane lane)
+{
+  lane_buf = lane;
+}
+
 RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
   : hub_(hub)
 {
@@ -24,7 +32,9 @@ RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
 
   // NOTE: I can not pass the a callback that points to a non-static member function.
   // Can solve via global variables, not the best thing either...
-  //final_wpts_sub_ = n.subscribe(SUBNAME_WAYPOINTS, MSG_QUEUE_SIZE, &(this->final_wpts_callback));
+  final_wpts_sub_ = n.subscribe<styx_msgs::Lane>(
+      SUBNAME_WAYPOINTS, MSG_QUEUE_SIZE, wpts_callback);
+  ros::spinOnce();
 }
 
 void RosBridge::handle_telemetry(const nlohmann::json &data)
@@ -40,6 +50,10 @@ void RosBridge::handle_telemetry(const nlohmann::json &data)
   velocity_pub_.publish(velocity_msg);
 
   // TODO: impl. call to emitting of the steer commands?
+
+  ros::spinOnce();
+
+  final_wpts_callback(lane_buf);
 }
 
 std_msgs::Bool RosBridge::to_dbw_status(const nlohmann::json &data)
@@ -136,8 +150,13 @@ geometry_msgs::PoseStamped RosBridge::create_pose(double x, double y, double z,
 
 void RosBridge::final_wpts_callback(const styx_msgs::Lane &lane)
 {
-    // TODO: impl!
-    wpt_xs_ = {0.0};
-    wpt_ys_ = {0.0};
-    wpt_zs_ = {0.0};
+  wpt_xs_.clear();
+  wpt_ys_.clear();
+  wpt_zs_.clear();
+  for (const auto &wpt : lane.waypoints)
+  {
+    wpt_xs_.push_back(wpt.pose.pose.position.x);
+    wpt_ys_.push_back(wpt.pose.pose.position.y);
+    wpt_zs_.push_back(wpt.pose.pose.position.z + 0.5);
+  }
 }

@@ -21,7 +21,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 200 #200 # Number of waypoints we will publish. You can change this number
 
 
 class WaypointUpdater(object):
@@ -32,18 +32,28 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-        rospy.Subscriber('/traffic_waypoint', Lane, self.traffic_cb)
-        rospy.Subscriber('/obstacle_waypoint', Lane, self.obstacle_cb)
+        #rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        #rospy.Subscriber('/obstacle_waypoint', Lane, self.obstacle_cb)
 
-        self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
+        self.final_waypoints_pub = rospy.Publisher('/final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
 
         rospy.spin()
 
     def pose_cb(self, msg):
-        # TODO: Implement
+        # TODO: Implement non-dummy waypoint generation.
         print('pose_cb msg: ', msg)
+        
+        dummy_lane = Lane()
+        for i in range(LOOKAHEAD_WPS):
+            dummy = Waypoint()
+            dummy.pose.pose.position.x = msg.pose.position.x + i*0.5
+            dummy.pose.pose.position.y = msg.pose.position.y + i*0.5
+            dummy.pose.pose.position.z = msg.pose.position.z + 0.5
+            dummy_lane.waypoints.append(dummy)
+        
+        self.final_waypoints_pub.publish(dummy_lane)
         pass
 
     def waypoints_cb(self, waypoints):
