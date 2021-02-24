@@ -124,6 +124,8 @@ int main(int argc, char **argv)
     ws.send(msg2.data(), msg2.length(), uWS::OpCode::TEXT);
     auto msg3 = "42[\"brake\"," + msgJson.dump() + "]";
     ws.send(msg3.data(), msg3.length(), uWS::OpCode::TEXT);
+    auto msg4 = rosbridge.get_waypoints_tcp_message();
+    ws.send(msg4.data(), msg4.length(), uWS::OpCode::TEXT);
   });
 
   h->onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {

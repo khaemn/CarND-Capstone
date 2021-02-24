@@ -9,6 +9,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Header.h>
 #include <std_msgs/String.h>
+#include <styx_msgs/Lane.h>
 #include <vector>
 #include <uWS/uWS.h>
 #include <memory>
@@ -25,12 +26,16 @@ public:
 
   std_msgs::Bool to_dbw_status(const nlohmann::json &data);
 
-  geometry_msgs::PoseStamped parse_pose(const nlohmann::json &data);
+  geometry_msgs::PoseStamped parse_position(const nlohmann::json &data);
 
   geometry_msgs::TwistStamped parse_velocities(const nlohmann::json &data);
 
+  std::string get_waypoints_tcp_message() const;
+
 private:
   double compute_angular_velocity(double new_yaw);
+  geometry_msgs::PoseStamped create_pose(double x, double y, double z, double yaw_degree) const;
+  void final_wpts_callback(const styx_msgs::Lane& lane);
 
 private:
   std::weak_ptr<uWS::Hub> hub_;
@@ -39,10 +44,17 @@ private:
   ros::Publisher pose_pub_;
   ros::Publisher velocity_pub_;
 
+  ros::Subscriber final_wpts_sub_;
+
   ros::Time prev_time_;
 
   bool is_dbw_enabled_ = true;
   double prev_yaw_ = INITIAL_YAW;
   double prev_angular_vel_ = 0.0;
   const double angular_velocity_filter_coeff_ = 10;
+
+  // Storage for the waypoint coords to send to the simulator
+  std::vector<double> wpt_xs_;
+  std::vector<double> wpt_ys_;
+  std::vector<double> wpt_zs_;
 };
