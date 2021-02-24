@@ -13,6 +13,7 @@
 #include <uWS/uWS.h>
 #include <memory>
 
+static constexpr auto INITIAL_YAW = 360;
 
 /// Implements a bridge between uWS and ROS topics
 class RosBridge
@@ -22,11 +23,14 @@ public:
 
   void handle_telemetry(const nlohmann::json& data);
 
-  static std_msgs::Bool to_dbw_status(const nlohmann::json &data);
+  std_msgs::Bool to_dbw_status(const nlohmann::json &data);
 
-  static geometry_msgs::PoseStamped to_pose(const nlohmann::json &data);
+  geometry_msgs::PoseStamped parse_pose(const nlohmann::json &data);
 
-  static geometry_msgs::TwistStamped to_velocity(const nlohmann::json &data);
+  geometry_msgs::TwistStamped parse_velocities(const nlohmann::json &data);
+
+private:
+  double compute_angular_velocity(double new_yaw);
 
 private:
   std::weak_ptr<uWS::Hub> hub_;
@@ -35,6 +39,10 @@ private:
   ros::Publisher pose_pub_;
   ros::Publisher velocity_pub_;
 
+  ros::Time prev_time_;
+
   bool is_dbw_enabled_ = true;
-  double prev_heading_angle_= 361.;
+  double prev_yaw_ = INITIAL_YAW;
+  double prev_angular_vel_ = 0.0;
+  const double angular_velocity_filter_coeff_ = 10;
 };
