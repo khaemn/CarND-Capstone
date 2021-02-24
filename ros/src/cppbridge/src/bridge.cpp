@@ -1,15 +1,15 @@
 #include "json.hpp"
+#include "rosbridge.h"
 
-#include <dbw_mkz_msgs/SteeringReport.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <iostream>
 #include <map>
 #include <math.h>
 #include <ros/ros.h>
-#include <std_msgs/String.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Header.h>
+#include <std_msgs/String.h>
 #include <string>
 #include <uWS/uWS.h>
 
@@ -75,61 +75,18 @@ static constexpr auto MSG_IMAGE         = "image";
   }
 */
 // From telemetry package
-static constexpr auto PUBNAME_DBW_STATUS = "/vehicle/dbw_enabled";
-static constexpr auto PUBNAME_VELOCITY   = "/current_velocity";
-static constexpr auto PUBNAME_POSE       = "/current_pose";
-
-static constexpr auto MSG_QUEUE_SIZE = 20;
 
 static constexpr auto SUBNAME_STEERING = "/vehicle/steering_cmd";
 
-static std_msgs::Bool to_dbw_status(const nlohmann::json &data)
-{
-  const bool enabled = data["dbw_enable"];
-  std_msgs::Bool msg;
-  msg.data = enabled;
-  return msg;
-}
-
-static geometry_msgs::PoseStamped to_pose(const nlohmann::json &data) {
-  geometry_msgs::PoseStamped msg;
-  std_msgs::Header hdr;
-  // TODO: stamp the header with ROS timestamp and other info
-  msg.header = hdr;
-  msg.pose.position.x = data["x"];
-  msg.pose.position.y = data["y"];
-  msg.pose.position.z = data["z"];
-  // TODO: quaternion orientation
-  return msg;
-}
-
-static geometry_msgs::TwistStamped to_velocity(const nlohmann::json &data)
-{
-  geometry_msgs::TwistStamped velocity;
-  std_msgs::Header            hdr;
-  // TODO: stamp the header with ROS timestamp and other info
-
-  velocity.twist.linear.x  = double(data["velocity"]) * 0.44704;  // MPH to m/s
-
-  velocity.twist.angular.z = 0.0;  // TODO: compute angular velocity!
-  return velocity;
-}
-
 int main(int argc, char **argv)
 {
-  uWS::Hub h;
+  // uWS::Hub h;
+  auto h = std::make_shared<uWS::Hub>();
 
-  ros::init(argc, argv, "simulator_bridge");
-  ros::NodeHandle n;
+  RosBridge rosbridge(std::weak_ptr<uWS::Hub>(h), argc, argv);
 
-  ros::Publisher dbw_status_pub = n.advertise<std_msgs::Bool>(PUBNAME_DBW_STATUS, MSG_QUEUE_SIZE);
-  ros::Publisher pose_pub = n.advertise<geometry_msgs::PoseStamped>(PUBNAME_POSE, MSG_QUEUE_SIZE);
-  ros::Publisher velocity_pub =
-      n.advertise<geometry_msgs::TwistStamped>(PUBNAME_VELOCITY, MSG_QUEUE_SIZE);
-
-  bool is_dbw_enabled = true;
-  h.onMessage([&dbw_status_pub, &pose_pub, &velocity_pub, &is_dbw_enabled](
-                  uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h->onMessage([/*&dbw_status_pub, &pose_pub, &velocity_pub*/ &rosbridge](
+                   uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -153,20 +110,13 @@ int main(int argc, char **argv)
 
     if (event == "telemetry")
     {
-      auto dbw_msg = to_dbw_status(j[1]);
-      dbw_status_pub.publish(dbw_msg);
-
-      auto pose_msg = to_pose(j[1]);
-      pose_pub.publish(pose_msg);
-
-      auto velocity_msg = to_velocity(j[1]);
-      velocity_pub.publish(velocity_msg);
+      rosbridge.handle_telemetry(j[1]);
     }
 
     json msgJson;
     msgJson["steering_angle"] = "1.0";
     msgJson["throttle"]       = "0.5";
-    msgJson["brake"]       = "0.0";
+    msgJson["brake"]          = "0.0";
 
     auto msg1 = "42[\"steer\"," + msgJson.dump() + "]";
     ws.send(msg1.data(), msg1.length(), uWS::OpCode::TEXT);
@@ -174,20 +124,19 @@ int main(int argc, char **argv)
     ws.send(msg2.data(), msg2.length(), uWS::OpCode::TEXT);
     auto msg3 = "42[\"brake\"," + msgJson.dump() + "]";
     ws.send(msg3.data(), msg3.length(), uWS::OpCode::TEXT);
+  });
 
-  });  // end h.onMessage
-
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+  h->onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
   });
 
-  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
+  h->onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
     ws.close();
     std::cout << "Disconnected" << std::endl;
   });
 
   int port = 4567;
-  if (h.listen(port))
+  if (h->listen(port))
   {
     std::cout << "Listening to port " << port << std::endl;
   }
@@ -197,5 +146,5 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  h.run();
+  h->run();
 }
