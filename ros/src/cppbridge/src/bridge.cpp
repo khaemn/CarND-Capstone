@@ -36,97 +36,53 @@ string hasData(string s)
   return "";
 }
 
-static constexpr auto MSG_TELEMETRY     = "telemetry";
-static constexpr auto MSG_CONTROL       = "control";
-static constexpr auto MSG_OBSTACLE      = "obstacle";
-static constexpr auto MSG_LIDAR         = "lidar";
-static constexpr auto MSG_TRAFFICLIGHTS = "trafficlights";
-static constexpr auto MSG_IMAGE         = "image";
-
-// According to styx/conf.py
-/*
- 'subscribers': [
-      {'topic':'/vehicle/steering_cmd', 'type': 'steer_cmd', 'name': 'steering'},
-      {'topic':'/vehicle/throttle_cmd', 'type': 'throttle_cmd', 'name': 'throttle'},
-      {'topic':'/vehicle/brake_cmd', 'type': 'brake_cmd', 'name': 'brake'},
-{'topic':'/final_waypoints', 'type': 'path_draw', 'name': 'path'},
-  ],
-  'publishers': [
-      {'topic': '/current_pose', 'type': 'pose', 'name': 'current_pose'},
-      {'topic': '/current_velocity', 'type': 'twist', 'name': 'current_velocity'},
-      {'topic': '/vehicle/steering_report', 'type': 'steer', 'name': 'steering_report'},
-      {'topic': '/vehicle/throttle_report', 'type': 'float', 'name': 'throttle_report'},
-      {'topic': '/vehicle/brake_report', 'type': 'float', 'name': 'brake_report'},
-      {'topic': '/vehicle/obstacle', 'type': 'pose', 'name': 'obstacle'},
-      {'topic': '/vehicle/obstacle_points', 'type': 'pcl', 'name': 'obstacle_points'},
-      {'topic': '/vehicle/lidar', 'type': 'pcl', 'name': 'lidar'},
-      {'topic': '/vehicle/traffic_lights', 'type': 'trafficlights', 'name': 'trafficlights'},
-      {'topic': '/vehicle/dbw_enabled', 'type': 'bool', 'name': 'dbw_status'},
-      {'topic': '/image_color', 'type': 'image', 'name': 'image'},
-  ]
-*/
-
-/*
-  self.callbacks = {
-      '/vehicle/steering_cmd': self.callback_steering,
-      '/vehicle/throttle_cmd': self.callback_throttle,
-      '/vehicle/brake_cmd': self.callback_brake,
-  '/final_waypoints': self.callback_path
-  }
-*/
-// From telemetry package
-
-static constexpr auto SUBNAME_STEERING = "/vehicle/steering_cmd";
-
 int main(int argc, char **argv)
 {
-  // uWS::Hub h;
   auto h = std::make_shared<uWS::Hub>();
 
   RosBridge rosbridge(std::weak_ptr<uWS::Hub>(h), argc, argv);
 
-  h->onMessage([/*&dbw_status_pub, &pose_pub, &velocity_pub*/ &rosbridge](
-                   uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
-    // "42" at the start of the message means there's a websocket message event.
-    // The 4 signifies a websocket message
-    // The 2 signifies a websocket event
-    const string inbound      = string(data).substr(0, length);
-    const bool   is_msg_valid = (length && length > 2 && data[0] == '4' && data[1] == '2');
-    if (!is_msg_valid)
-    {
-      return;
-    }
+  h->onMessage(
+      [&rosbridge](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+        // "42" at the start of the message means there's a websocket message event.
+        // The 4 signifies a websocket message
+        // The 2 signifies a websocket event
+        const string inbound      = string(data).substr(0, length);
+        const bool   is_msg_valid = (length && length > 2 && data[0] == '4' && data[1] == '2');
+        if (!is_msg_valid)
+        {
+          return;
+        }
 
-    auto s = hasData(inbound);
-    if (s.empty())
-    {
-      return;
-    }
+        auto s = hasData(inbound);
+        if (s.empty())
+        {
+          return;
+        }
 
-    auto j = json::parse(s);
-    // std::cout << "Message :\n" << inbound << std::endl;
+        auto j = json::parse(s);
 
-    string event = j[0].get<string>();
+        string event = j[0].get<string>();
 
-    if (event == "telemetry")
-    {
-      rosbridge.handle_telemetry(j[1]);
-    }
+        if (event == "telemetry")
+        {
+          rosbridge.handle_telemetry(j[1]);
+        }
 
-    json msgJson;
-    msgJson["steering_angle"] = "1.0";
-    msgJson["throttle"]       = "0.5";
-    msgJson["brake"]          = "0.0";
+        json msgJson;
+        msgJson["steering_angle"] = std::to_string(rosbridge.steering_angle());
+        msgJson["throttle"]       = std::to_string(rosbridge.throttle_val());
+        msgJson["brake"]          = std::to_string(rosbridge.brake_val());
 
-    auto msg1 = "42[\"steer\"," + msgJson.dump() + "]";
-    ws.send(msg1.data(), msg1.length(), uWS::OpCode::TEXT);
-    auto msg2 = "42[\"throttle\"," + msgJson.dump() + "]";
-    ws.send(msg2.data(), msg2.length(), uWS::OpCode::TEXT);
-    auto msg3 = "42[\"brake\"," + msgJson.dump() + "]";
-    ws.send(msg3.data(), msg3.length(), uWS::OpCode::TEXT);
-    auto msg4 = rosbridge.get_waypoints_tcp_message();
-    ws.send(msg4.data(), msg4.length(), uWS::OpCode::TEXT);
-  });
+        auto msg1 = "42[\"steer\"," + msgJson.dump() + "]";
+        ws.send(msg1.data(), msg1.length(), uWS::OpCode::TEXT);
+        auto msg2 = "42[\"throttle\"," + msgJson.dump() + "]";
+        ws.send(msg2.data(), msg2.length(), uWS::OpCode::TEXT);
+        auto msg3 = "42[\"brake\"," + msgJson.dump() + "]";
+        ws.send(msg3.data(), msg3.length(), uWS::OpCode::TEXT);
+        auto msg4 = rosbridge.get_waypoints_tcp_message();
+        ws.send(msg4.data(), msg4.length(), uWS::OpCode::TEXT);
+      });
 
   h->onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;

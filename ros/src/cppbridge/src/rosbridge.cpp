@@ -4,21 +4,51 @@
 #include <ros/time.h>
 #include <tf/transform_datatypes.h>
 
+#include <dbw_mkz_msgs/BrakeCmd.h>
+#include <dbw_mkz_msgs/ThrottleCmd.h>
+#include <dbw_mkz_msgs/SteeringCmd.h>
+
 static constexpr auto PUBNAME_DBW_STATUS = "/vehicle/dbw_enabled";
 static constexpr auto PUBNAME_VELOCITY   = "/current_velocity";
 static constexpr auto PUBNAME_POSE       = "/current_pose";
 
-static constexpr auto SUBNAME_WAYPOINTS = "/final_waypoints";
+static constexpr auto SUBNAME_WAYPOINTS = "/final_waypoints"; // styx_msgs/Lane
+static constexpr auto SUBNAME_THROTTLE = "/vehicle/throttle_cmd"; // dbw_mkz_msgs/ThrottleCmd
+static constexpr auto SUBNAME_BRAKE = "/vehicle/brake_cmd"; // dbw_mkz_msgs/BrakeCmd
+static constexpr auto SUBNAME_STEERING = "/vehicle/steering_cmd"; // dbw_mkz_msgs/SteeringCmd
 
 static constexpr auto MSG_QUEUE_SIZE = 20;
 
-static styx_msgs::Lane
-    lane_buf;  // Workaround! BUt better that passing of member method as a callback.
+// Workarounds for storing values from ROS subscriber callbacks
+// But it's better than passing of member method as a callback.
+static styx_msgs::Lane lane_buf;
 
-void wpts_callback(styx_msgs::Lane lane)
+void wpts_callback(const styx_msgs::Lane& lane)
 {
   lane_buf = lane;
 }
+
+static dbw_mkz_msgs::SteeringCmd steering_cmd;
+
+void steering_callback(const dbw_mkz_msgs::SteeringCmd &cmd)
+{
+  steering_cmd = cmd;
+}
+
+static dbw_mkz_msgs::BrakeCmd brake_cmd;
+
+void brake_callback(const dbw_mkz_msgs::BrakeCmd &cmd)
+{
+  brake_cmd = cmd;
+}
+
+static dbw_mkz_msgs::ThrottleCmd throttle_cmd;
+
+void throttle_callback(const dbw_mkz_msgs::ThrottleCmd &cmd)
+{
+  throttle_cmd = cmd;
+}
+
 
 RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
   : hub_(hub)
@@ -32,36 +62,40 @@ RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
 
   // NOTE: I can not pass the a callback that points to a non-static member function.
   // Can solve via global variables, not the best thing either...
-  final_wpts_sub_ = n.subscribe<styx_msgs::Lane>(
-      SUBNAME_WAYPOINTS, MSG_QUEUE_SIZE, wpts_callback);
+  final_wpts_sub_ = n.subscribe(SUBNAME_WAYPOINTS, MSG_QUEUE_SIZE, wpts_callback);
+  steering_sub_ = n.subscribe(SUBNAME_STEERING, MSG_QUEUE_SIZE, steering_callback);
+  brake_sub_ = n.subscribe(SUBNAME_BRAKE, MSG_QUEUE_SIZE, brake_callback);
+  throttle_sub_ = n.subscribe(SUBNAME_THROTTLE, MSG_QUEUE_SIZE, throttle_callback);
+
   ros::spinOnce();
 }
 
 void RosBridge::handle_telemetry(const nlohmann::json &data)
 {
-  // TODO: impl. only a 'delta'-publishing.
-  auto dbw_msg = to_dbw_status(data);
-  dbw_status_pub_.publish(dbw_msg);
+  publish_changed_dbw_status(data);
 
-  auto pose_msg = parse_position(data);
-  pose_pub_.publish(pose_msg);
+  pose_pub_.publish(parse_position(data));
 
-  auto velocity_msg = parse_velocities(data);
-  velocity_pub_.publish(velocity_msg);
+  velocity_pub_.publish(parse_velocities(data));
 
-  // TODO: impl. call to emitting of the steer commands?
+  // Note: throttle, break, steer commands are being
+  // created and emitted in the Server part, not here.
 
   ros::spinOnce();
 
   final_wpts_callback(lane_buf);
 }
 
-std_msgs::Bool RosBridge::to_dbw_status(const nlohmann::json &data)
+void RosBridge::publish_changed_dbw_status(const nlohmann::json &data)
 {
-  const bool     enabled = data["dbw_enable"];
-  std_msgs::Bool msg;
-  msg.data = enabled;
-  return msg;
+  const bool enabled = data["dbw_enable"];
+  if (is_dbw_enabled_ != enabled)
+  {
+    std_msgs::Bool msg;
+    msg.data = enabled;
+    dbw_status_pub_.publish(msg);
+  }
+  is_dbw_enabled_ = enabled;
 }
 
 geometry_msgs::PoseStamped RosBridge::parse_position(const nlohmann::json &data)
@@ -94,6 +128,21 @@ std::string RosBridge::get_waypoints_tcp_message() const
   msgJson["next_z"]     = wpt_zs_;
   const std::string msg = "42[\"drawline\"," + msgJson.dump() + "]";
   return msg;
+}
+
+float RosBridge::steering_angle() const
+{
+  return steering_cmd.steering_wheel_angle_cmd;
+}
+
+float RosBridge::throttle_val() const
+{
+  return throttle_cmd.pedal_cmd;
+}
+
+float RosBridge::brake_val() const
+{
+  return brake_cmd.pedal_cmd;
 }
 
 double RosBridge::compute_angular_velocity(double new_yaw)

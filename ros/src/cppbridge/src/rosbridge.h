@@ -24,13 +24,17 @@ public:
 
   void handle_telemetry(const nlohmann::json& data);
 
-  std_msgs::Bool to_dbw_status(const nlohmann::json &data);
+  void publish_changed_dbw_status(const nlohmann::json &data);
 
   geometry_msgs::PoseStamped parse_position(const nlohmann::json &data);
 
   geometry_msgs::TwistStamped parse_velocities(const nlohmann::json &data);
 
   std::string get_waypoints_tcp_message() const;
+
+  float steering_angle() const;
+  float throttle_val() const;
+  float brake_val() const;
 
 private:
   double compute_angular_velocity(double new_yaw);
@@ -45,6 +49,9 @@ private:
   ros::Publisher velocity_pub_;
 
   ros::Subscriber final_wpts_sub_;
+  ros::Subscriber steering_sub_;
+  ros::Subscriber throttle_sub_;
+  ros::Subscriber brake_sub_;
 
   ros::Time prev_time_;
 
