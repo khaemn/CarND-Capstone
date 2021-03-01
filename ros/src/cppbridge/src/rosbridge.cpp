@@ -62,6 +62,7 @@ RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
 
   // NOTE: I can not pass the a callback that points to a non-static member function.
   // Can solve via global variables, not the best thing either...
+
   final_wpts_sub_ = n.subscribe(SUBNAME_WAYPOINTS, MSG_QUEUE_SIZE, wpts_callback);
   steering_sub_ = n.subscribe(SUBNAME_STEERING, MSG_QUEUE_SIZE, steering_callback);
   brake_sub_ = n.subscribe(SUBNAME_BRAKE, MSG_QUEUE_SIZE, brake_callback);
