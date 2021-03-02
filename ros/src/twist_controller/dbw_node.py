@@ -6,7 +6,7 @@ from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
 from geometry_msgs.msg import TwistStamped
 import math
 
-from twist_controller import Controller
+from twist_controller import Controller, ONE_MPH
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -95,15 +95,12 @@ class DBWNode(object):
             # TODO: Get predicted throttle, brake, and steering using `twist_controller`
             # You should only publish the control commands if dbw is enabled
             throttle, brake, steering = self.controller.control(
-                desired_linear_vel=self.desired_linear_vel,
+                desired_linear_vel=54.5 * ONE_MPH, #TODO: DEBUG! # self.desired_linear_vel,
                 desired_angular_vel=self.desired_angular_vel,
                 curr_linear_vel=self.curr_linear_vel,
                 curr_angular_vel=self.curr_angular_vel,
                 dbw_enabled=self.enabled
             )
-            #throttle = 0.1
-            #brake = 0.0
-            #steer = -0.15
             if self.enabled:
                 self.publish(throttle, brake, steering) # DUMMY! deleteme
             rate.sleep()

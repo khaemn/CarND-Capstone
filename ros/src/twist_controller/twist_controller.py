@@ -1,4 +1,9 @@
 
+import rospy
+from yaw_controller import YawController
+from pid import PID
+
+
 GAS_DENSITY = 2.858
 ONE_MPH = 0.44704
 
@@ -27,6 +32,20 @@ class Controller(object):
         self.steer_ratio = steer_ratio
         self.max_lat_accel = max_lat_accel
         self.max_steer_angle = max_steer_angle
+        self.min_speed_ms = 0.1
+        
+        kp = 0.3; ki = 0.1; kd = 0.;
+        self.min_allowed_throttle = 0.
+        max_allowed_throttle = 1.
+        self.throttle_controller = PID(kp, ki, kd, self.min_allowed_throttle, max_allowed_throttle)
+        
+        self.yaw_controller = YawController(self.wheel_base,
+                                            self.steer_ratio,
+                                            self.min_speed_ms,
+                                            self.max_lat_accel,
+                                            self.max_steer_angle)
+                                            
+        self.last_time = rospy.get_time()
 
         # TODO: Implement
         pass
@@ -38,6 +57,23 @@ class Controller(object):
                 curr_angular_vel=0.,
                 dbw_enabled=False,
                 **kwargs):
+        time_now = rospy.get_time()
+        time_passed = time_now - self.last_time
+        self.last_time = time_now
+        
+        if not dbw_enabled:
+            self.throttle_controller.reset()
+            return 0.0, 0.0, 0.0
+        
+        linear_velocity_error = desired_linear_vel - curr_linear_vel
+        throttle = self.throttle_controller.step(linear_velocity_error, time_passed)
+
+        if throttle <= self.min_allowed_throttle and desired_linear_vel < curr_linear_vel:
+            brake = 700. # TODO: DEBUG!
+        else:
+            brake = 0. 
+
         # TODO: Change the arg, kwarg list to suit your needs
         # Return throttle, brake, steer
-        return .2, 0., 0.7
+        #rospy.logwarn('Thro ', throttle, ', br ', brake)
+        return throttle, brake, -0.07
