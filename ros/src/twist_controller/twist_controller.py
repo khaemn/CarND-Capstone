@@ -72,8 +72,10 @@ class Controller(object):
             brake = 700. # TODO: DEBUG!
         else:
             brake = 0. 
+            
+        steering = self.yaw_controller.get_steering(
+                        desired_linear_vel,
+                        desired_angular_vel,
+                        curr_linear_vel)
 
-        # TODO: Change the arg, kwarg list to suit your needs
-        # Return throttle, brake, steer
-        #rospy.logwarn('Thro ', throttle, ', br ', brake)
-        return throttle, brake, -0.07
+        return throttle, brake, steering
