@@ -69,6 +69,10 @@ int main(int argc, char **argv)
           rosbridge.handle_telemetry(j[1]);
         }
 
+        if (event == "trafficlights") {
+            rosbridge.handle_traffic_lights(j[1]);
+        }
+
         json msgJson;
         msgJson["steering_angle"] = std::to_string(rosbridge.steering_angle());
         msgJson["throttle"]       = std::to_string(rosbridge.throttle_val());

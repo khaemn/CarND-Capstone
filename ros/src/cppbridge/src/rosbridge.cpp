@@ -1,29 +1,52 @@
 #include "rosbridge.h"
 
+#include <dbw_mkz_msgs/BrakeCmd.h>
+#include <dbw_mkz_msgs/SteeringCmd.h>
+#include <dbw_mkz_msgs/ThrottleCmd.h>
+#include <styx_msgs/TrafficLightArray.h>
 #include <ros/duration.h>
 #include <ros/time.h>
 #include <tf/transform_datatypes.h>
 
-#include <dbw_mkz_msgs/BrakeCmd.h>
-#include <dbw_mkz_msgs/ThrottleCmd.h>
-#include <dbw_mkz_msgs/SteeringCmd.h>
-
-static constexpr auto PUBNAME_DBW_STATUS = "/vehicle/dbw_enabled";
-static constexpr auto PUBNAME_VELOCITY   = "/current_velocity";
+using std::vector;
+using std::cout;
+using std::endl;
+/*
+{'topic': '/current_pose', 'type': 'pose', 'name': 'current_pose'},
+{'topic': '/current_velocity', 'type': 'twist', 'name': 'current_velocity'},
+ {'topic': '/vehicle/steering_report', 'type': 'steer', 'name': 'steering_report'},
+ {'topic': '/vehicle/throttle_report', 'type': 'float', 'name': 'throttle_report'},
+ {'topic': '/vehicle/brake_report', 'type': 'float', 'name': 'brake_report'},
+ {'topic': '/vehicle/obstacle', 'type': 'pose', 'name': 'obstacle'},
+ {'topic': '/vehicle/obstacle_points', 'type': 'pcl', 'name': 'obstacle_points'},
+ {'topic': '/vehicle/lidar', 'type': 'pcl', 'name': 'lidar'},
+{'topic': '/vehicle/traffic_lights', 'type': 'trafficlights', 'name': 'trafficlights'},
+{'topic': '/vehicle/dbw_enabled', 'type': 'bool', 'name': 'dbw_status'},
+ {'topic': '/image_color', 'type': 'image', 'name': 'image'},
+*/
 static constexpr auto PUBNAME_POSE       = "/current_pose";
+static constexpr auto PUBNAME_VELOCITY   = "/current_velocity";
+// ...
+static constexpr auto PUBNAME_TRAFFIC_LIGHTS = "/vehicle/traffic_lights";
+static constexpr auto PUBNAME_DBW_STATUS = "/vehicle/dbw_enabled";
+/*
+{'topic':'/vehicle/steering_cmd', 'type': 'steer_cmd', 'name': 'steering'},
+{'topic':'/vehicle/throttle_cmd', 'type': 'throttle_cmd', 'name': 'throttle'},
+{'topic':'/vehicle/brake_cmd', 'type': 'brake_cmd', 'name': 'brake'},
+{'topic':'/final_waypoints', 'type': 'path_draw', 'name': 'path'},
+*/
+static constexpr auto SUBNAME_STEERING  = "/vehicle/steering_cmd";  // dbw_mkz_msgs/SteeringCmd
+static constexpr auto SUBNAME_THROTTLE  = "/vehicle/throttle_cmd";  // dbw_mkz_msgs/ThrottleCmd
+static constexpr auto SUBNAME_BRAKE     = "/vehicle/brake_cmd";     // dbw_mkz_msgs/BrakeCmd
+static constexpr auto SUBNAME_WAYPOINTS = "/final_waypoints";       // styx_msgs/Lane
 
-static constexpr auto SUBNAME_WAYPOINTS = "/final_waypoints"; // styx_msgs/Lane
-static constexpr auto SUBNAME_THROTTLE = "/vehicle/throttle_cmd"; // dbw_mkz_msgs/ThrottleCmd
-static constexpr auto SUBNAME_BRAKE = "/vehicle/brake_cmd"; // dbw_mkz_msgs/BrakeCmd
-static constexpr auto SUBNAME_STEERING = "/vehicle/steering_cmd"; // dbw_mkz_msgs/SteeringCmd
-
-static constexpr auto MSG_QUEUE_SIZE = 20;
+static constexpr auto MSG_QUEUE_SIZE = 5;
 
 // Workarounds for storing values from ROS subscriber callbacks
 // But it's better than passing of member method as a callback.
 static styx_msgs::Lane lane_buf;
 
-void wpts_callback(const styx_msgs::Lane& lane)
+void wpts_callback(const styx_msgs::Lane &lane)
 {
   lane_buf = lane;
 }
@@ -49,7 +72,6 @@ void throttle_callback(const dbw_mkz_msgs::ThrottleCmd &cmd)
   throttle_cmd = cmd;
 }
 
-
 RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
   : hub_(hub)
 {
@@ -59,14 +81,15 @@ RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
   dbw_status_pub_ = n.advertise<std_msgs::Bool>(PUBNAME_DBW_STATUS, MSG_QUEUE_SIZE);
   pose_pub_       = n.advertise<geometry_msgs::PoseStamped>(PUBNAME_POSE, MSG_QUEUE_SIZE);
   velocity_pub_   = n.advertise<geometry_msgs::TwistStamped>(PUBNAME_VELOCITY, MSG_QUEUE_SIZE);
-
+  trafficlight_pub_ =
+      n.advertise<styx_msgs::TrafficLightArray>(PUBNAME_TRAFFIC_LIGHTS, MSG_QUEUE_SIZE);
   // NOTE: I can not pass the a callback that points to a non-static member function.
   // Can solve via global variables, not the best thing either...
 
   final_wpts_sub_ = n.subscribe(SUBNAME_WAYPOINTS, MSG_QUEUE_SIZE, wpts_callback);
-  steering_sub_ = n.subscribe(SUBNAME_STEERING, MSG_QUEUE_SIZE, steering_callback);
-  brake_sub_ = n.subscribe(SUBNAME_BRAKE, MSG_QUEUE_SIZE, brake_callback);
-  throttle_sub_ = n.subscribe(SUBNAME_THROTTLE, MSG_QUEUE_SIZE, throttle_callback);
+  steering_sub_   = n.subscribe(SUBNAME_STEERING, MSG_QUEUE_SIZE, steering_callback);
+  brake_sub_      = n.subscribe(SUBNAME_BRAKE, MSG_QUEUE_SIZE, brake_callback);
+  throttle_sub_   = n.subscribe(SUBNAME_THROTTLE, MSG_QUEUE_SIZE, throttle_callback);
 
   ros::spinOnce();
 }
@@ -99,7 +122,7 @@ void RosBridge::publish_changed_dbw_status(const nlohmann::json &data)
   is_dbw_enabled_ = enabled;
 }
 
-geometry_msgs::PoseStamped RosBridge::parse_position(const nlohmann::json &data)
+geometry_msgs::PoseStamped RosBridge::parse_position(const nlohmann::json &data) const
 {
   const double x          = data["x"];
   const double y          = data["y"];
@@ -111,14 +134,54 @@ geometry_msgs::PoseStamped RosBridge::parse_position(const nlohmann::json &data)
 
 geometry_msgs::TwistStamped RosBridge::parse_velocities(const nlohmann::json &data)
 {
+  static constexpr auto       ONE_MPH_IN_MS = 0.44704;
   geometry_msgs::TwistStamped velocity;
 
   // Velocity is measured in the vehicle's CS, so the linear velocity is
   // always along 'x', and the angular one is around 'z' axes.
   // The 'y' is headed to the left, 'z' - up.
-  velocity.twist.linear.x  = double(data["velocity"]) * 0.44704;  // MPH to m/s
+  velocity.twist.linear.x  = double(data["velocity"]) * ONE_MPH_IN_MS;
   velocity.twist.angular.z = compute_angular_velocity(double(data["yaw"]));
   return velocity;
+}
+
+void RosBridge::handle_traffic_lights(const nlohmann::json &data)
+{
+  vector<double> x_points = data["light_pos_x"];
+  vector<double> y_points = data["light_pos_y"];
+  vector<double> z_points = data["light_pos_z"];
+  vector<double> dx = data["light_pos_dx"];
+  vector<double> dy = data["light_pos_dy"];
+  vector<uint8_t> states = data["light_state"];
+  // 0 - red, 1 - yellow, 2 - green
+
+  const bool are_sizes_ok = x_points.size() == y_points.size() &&
+                            x_points.size() == z_points.size() &&
+                            x_points.size() == states.size() && x_points.size() == dx.size() &&
+                            x_points.size() == dy.size();
+  if (not are_sizes_ok)
+  {
+    ROS_ERROR("Traffic light data sizes are not equal!");
+    return;
+  }
+
+  styx_msgs::TrafficLightArray msg;
+  std_msgs::Header        hdr;
+  hdr.stamp    = ros::Time::now();
+  hdr.frame_id = "/world";
+  msg.header = hdr;
+
+  for (size_t i{0}; i < x_points.size(); ++i) {
+      const auto x = x_points[i];
+      const auto y = y_points[i];
+      const auto z = z_points[i];
+      const auto yaw = atan2(dy[i], dx[i]);
+      const auto state = states[i];
+      styx_msgs::TrafficLight light = create_light(x, y, z, yaw, state);
+      msg.lights.push_back(light);
+  }
+
+  trafficlight_pub_.publish(msg);
 }
 
 std::string RosBridge::get_waypoints_tcp_message() const
@@ -196,6 +259,21 @@ geometry_msgs::PoseStamped RosBridge::create_pose(double x, double y, double z,
   pose_stamped.pose.orientation = orientation;
 
   return pose_stamped;
+}
+
+styx_msgs::TrafficLight RosBridge::create_light(double x, double y, double z, double yaw_degree,
+                                                uint8_t state) const
+{
+  styx_msgs::TrafficLight light;
+  std_msgs::Header        hdr;
+  hdr.stamp    = ros::Time::now();
+  hdr.frame_id = "/world";
+  light.header = hdr;
+
+  light.pose  = create_pose(x, y, z, yaw_degree);
+  light.state = state;
+
+  return light;
 }
 
 void RosBridge::final_wpts_callback(const styx_msgs::Lane &lane)

@@ -9,7 +9,9 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Header.h>
 #include <std_msgs/String.h>
+#include <styx_msgs/TrafficLight.h>
 #include <styx_msgs/Lane.h>
+
 #include <vector>
 #include <uWS/uWS.h>
 #include <memory>
@@ -26,9 +28,11 @@ public:
 
   void publish_changed_dbw_status(const nlohmann::json &data);
 
-  geometry_msgs::PoseStamped parse_position(const nlohmann::json &data);
+  geometry_msgs::PoseStamped parse_position(const nlohmann::json &data) const;
 
   geometry_msgs::TwistStamped parse_velocities(const nlohmann::json &data);
+
+  void handle_traffic_lights(const nlohmann::json &data);
 
   std::string get_waypoints_tcp_message() const;
 
@@ -39,7 +43,9 @@ public:
 private:
   double compute_angular_velocity(double new_yaw);
   geometry_msgs::PoseStamped create_pose(double x, double y, double z, double yaw_degree) const;
-  void final_wpts_callback(const styx_msgs::Lane& lane);
+  styx_msgs::TrafficLight    create_light(double x, double y, double z, double yaw_degree,
+                                          uint8_t state) const;
+  void                       final_wpts_callback(const styx_msgs::Lane &lane);
 
 private:
   std::weak_ptr<uWS::Hub> hub_;
@@ -47,6 +53,7 @@ private:
   ros::Publisher dbw_status_pub_;
   ros::Publisher pose_pub_;
   ros::Publisher velocity_pub_;
+  ros::Publisher trafficlight_pub_;
 
   ros::Subscriber final_wpts_sub_;
   ros::Subscriber steering_sub_;
