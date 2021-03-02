@@ -36,7 +36,7 @@ class Controller(object):
         
         kp = 0.3; ki = 0.1; kd = 0.;
         self.min_allowed_throttle = 0.
-        max_allowed_throttle = 1.
+        max_allowed_throttle = 0.4
         self.throttle_controller = PID(kp, ki, kd, self.min_allowed_throttle, max_allowed_throttle)
         
         self.yaw_controller = YawController(self.wheel_base,
