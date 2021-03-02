@@ -59,7 +59,16 @@ class DBWNode(object):
         self.desired_angular_vel = 0.
         self.enabled = False
         # TODO: Create `Controller` object
-        # self.controller = Controller(<Arguments you wish to provide>)
+        self.controller = Controller(vehicle_mass=vehicle_mass,
+                                     fuel_capacity=fuel_capacity,
+                                     brake_deadband=brake_deadband,
+                                     decel_limit=decel_limit,
+                                     accel_limit=accel_limit,
+                                     wheel_radius=wheel_radius,
+                                     wheel_base=wheel_base,
+                                     steer_ratio=steer_ratio,
+                                     max_lat_accel=max_lat_accel,
+                                     max_steer_angle=max_steer_angle)
 
         # TODO: Subscribe to all the topics you need to
         rospy.Subscriber('/current_velocity', TwistStamped, self.velocity_cb)
@@ -85,16 +94,18 @@ class DBWNode(object):
         while not rospy.is_shutdown():
             # TODO: Get predicted throttle, brake, and steering using `twist_controller`
             # You should only publish the control commands if dbw is enabled
-            # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
-            #                                                     <proposed angular velocity>,
-            #                                                     <current linear velocity>,
-            #                                                     <dbw status>,
-            #                                                     <any other argument you need>)
-            throttle = 0.1
-            brake = 0.0
-            steer = -0.15
+            throttle, brake, steering = self.controller.control(
+                desired_linear_vel=self.desired_linear_vel,
+                desired_angular_vel=self.desired_angular_vel,
+                curr_linear_vel=self.curr_linear_vel,
+                curr_angular_vel=self.curr_angular_vel,
+                dbw_enabled=self.enabled
+            )
+            #throttle = 0.1
+            #brake = 0.0
+            #steer = -0.15
             if self.enabled:
-                self.publish(throttle, brake, steer) # DUMMY! deleteme
+                self.publish(throttle, brake, steering) # DUMMY! deleteme
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
