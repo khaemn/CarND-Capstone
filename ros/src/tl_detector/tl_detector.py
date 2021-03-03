@@ -68,6 +68,9 @@ class TLDetector(object):
             [[ light.pose.pose.position.x, light.pose.pose.position.y ] \
                                         for light in self.lights ]
         self.lights_coord_tree = KDTree(lights_xy_coords)
+        
+        # Closest wpt at the start is 273
+        self.upcoming_red_light_pub.publish(Int32(573)) # DUMMY! DELETEME!
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
