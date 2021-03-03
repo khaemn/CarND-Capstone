@@ -71,8 +71,12 @@ class Controller(object):
         linear_velocity_error = desired_linear_vel - filtered_curr_linear_vel
         throttle = self.throttle_controller.step(linear_velocity_error, time_passed)
 
-        if throttle <= self.min_allowed_throttle and desired_linear_vel < filtered_curr_linear_vel:
-            brake = 700. # TODO: DEBUG!
+        if desired_linear_vel < filtered_curr_linear_vel:
+            if throttle <= self.min_allowed_throttle:
+                brake = 700. # full stop
+            else:
+                #TODO: smooth deceleration using the wheel radius
+                brake = 200.
         else:
             brake = 0. 
             
