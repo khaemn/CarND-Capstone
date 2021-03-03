@@ -7,6 +7,7 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifier
+from scipy.spatial import KDTree
 import tf
 import cv2
 import yaml
@@ -48,6 +49,7 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+        self.lights_coord_tree = None
 
         rospy.spin()
 
@@ -59,6 +61,13 @@ class TLDetector(object):
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
+        # As there is usually only few traffic light in sight, it is effective
+        # enough to re-generate a KDTree for them, in order to solve the
+        # closest traffic light finding problem.
+        lights_xy_coords = \
+            [[ light.pose.pose.position.x, light.pose.pose.position.y ] \
+                                        for light in self.lights ]
+        self.lights_coord_tree = KDTree(lights_xy_coords)
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -101,6 +110,11 @@ class TLDetector(object):
 
         """
         #TODO implement
+        closest_traffic_light_idx = self.lights_coord_tree.query([pose.position.x, pose.position.y], 1)[1]
+        rospy.logerror("Closest traffic light: ", [pose.position.x, pose.position.y], 
+                        [self.lights[closest_traffic_light_idx].pose.pose.position.x,
+                         self.lights[closest_traffic_light_idx].pose.pose.position.y]
+                      )
         return 0
 
     def get_light_state(self, light):
