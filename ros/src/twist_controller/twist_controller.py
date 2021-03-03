@@ -2,7 +2,7 @@
 import rospy
 from yaw_controller import YawController
 from pid import PID
-
+from lowpass import LowPassFilter
 
 GAS_DENSITY = 2.858
 ONE_MPH = 0.44704
@@ -44,7 +44,9 @@ class Controller(object):
                                             self.min_speed_ms,
                                             self.max_lat_accel,
                                             self.max_steer_angle)
-                                            
+        sample_time_sec = 0.02
+        cutoff_freq_hz = 0.5
+        self.speed_filter = LowPassFilter(cutoff_freq_hz, sample_time_sec)
         self.last_time = rospy.get_time()
 
         # TODO: Implement
@@ -65,10 +67,11 @@ class Controller(object):
             self.throttle_controller.reset()
             return 0.0, 0.0, 0.0
         
-        linear_velocity_error = desired_linear_vel - curr_linear_vel
+        filtered_curr_linear_vel = self.speed_filter.filt(curr_linear_vel)
+        linear_velocity_error = desired_linear_vel - filtered_curr_linear_vel
         throttle = self.throttle_controller.step(linear_velocity_error, time_passed)
 
-        if throttle <= self.min_allowed_throttle and desired_linear_vel < curr_linear_vel:
+        if throttle <= self.min_allowed_throttle and desired_linear_vel < filtered_curr_linear_vel:
             brake = 700. # TODO: DEBUG!
         else:
             brake = 0. 
@@ -76,6 +79,6 @@ class Controller(object):
         steering = self.yaw_controller.get_steering(
                         desired_linear_vel,
                         desired_angular_vel,
-                        curr_linear_vel)
+                        filtered_curr_linear_vel)
 
         return throttle, brake, steering
