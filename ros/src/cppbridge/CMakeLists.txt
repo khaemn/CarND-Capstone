@@ -18,7 +18,11 @@ link_directories(/usr/local/lib)
 
 catkin_package()
 
-add_executable(bridge src/bridge.cpp src/rosbridge.cpp)
+add_executable(bridge
+    src/bridge.cpp
+    src/rosbridge.cpp
+    src/cpp-base64/base64.cpp
+)
 
 target_link_libraries(bridge ${catkin_LIBRARIES} z ssl uv uWS)
 

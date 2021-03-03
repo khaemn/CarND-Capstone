@@ -3,10 +3,18 @@
 #include <dbw_mkz_msgs/BrakeCmd.h>
 #include <dbw_mkz_msgs/SteeringCmd.h>
 #include <dbw_mkz_msgs/ThrottleCmd.h>
+#include <sensor_msgs/Image.h>
 #include <styx_msgs/TrafficLightArray.h>
 #include <ros/duration.h>
 #include <ros/time.h>
+#include <cv_bridge/cv_bridge.h>
 #include <tf/transform_datatypes.h>
+
+#include "cpp-base64/base64.h"
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/imgproc/types_c.h>
+#include <opencv2/imgcodecs.hpp>
 
 using std::vector;
 using std::cout;
@@ -24,11 +32,12 @@ using std::endl;
 {'topic': '/vehicle/dbw_enabled', 'type': 'bool', 'name': 'dbw_status'},
  {'topic': '/image_color', 'type': 'image', 'name': 'image'},
 */
-static constexpr auto PUBNAME_POSE       = "/current_pose";
-static constexpr auto PUBNAME_VELOCITY   = "/current_velocity";
+static constexpr auto PUBNAME_POSE     = "/current_pose";
+static constexpr auto PUBNAME_VELOCITY = "/current_velocity";
 // ...
 static constexpr auto PUBNAME_TRAFFIC_LIGHTS = "/vehicle/traffic_lights";
-static constexpr auto PUBNAME_DBW_STATUS = "/vehicle/dbw_enabled";
+static constexpr auto PUBNAME_DBW_STATUS     = "/vehicle/dbw_enabled";
+static constexpr auto PUBNAME_IMAGE          = "/image_color";
 /*
 {'topic':'/vehicle/steering_cmd', 'type': 'steer_cmd', 'name': 'steering'},
 {'topic':'/vehicle/throttle_cmd', 'type': 'throttle_cmd', 'name': 'throttle'},
@@ -83,6 +92,7 @@ RosBridge::RosBridge(std::weak_ptr<uWS::Hub> hub, int argc, char **argv)
   velocity_pub_   = n.advertise<geometry_msgs::TwistStamped>(PUBNAME_VELOCITY, MSG_QUEUE_SIZE);
   trafficlight_pub_ =
       n.advertise<styx_msgs::TrafficLightArray>(PUBNAME_TRAFFIC_LIGHTS, MSG_QUEUE_SIZE);
+  image_pub_ = n.advertise<sensor_msgs::Image>(PUBNAME_IMAGE, 1);
   // NOTE: I can not pass the a callback that points to a non-static member function.
   // Can solve via global variables, not the best thing either...
 
@@ -145,7 +155,7 @@ geometry_msgs::TwistStamped RosBridge::parse_velocities(const nlohmann::json &da
   return velocity;
 }
 
-void RosBridge::handle_traffic_lights(const nlohmann::json &data)
+void RosBridge::handle_traffic_lights(const nlohmann::json &data) const
 {
   vector<double> x_points = data["light_pos_x"];
   vector<double> y_points = data["light_pos_y"];
@@ -182,6 +192,24 @@ void RosBridge::handle_traffic_lights(const nlohmann::json &data)
   }
 
   trafficlight_pub_.publish(msg);
+}
+
+void RosBridge::handle_camera_image(const nlohmann::json &data) const
+{
+  if (++img_msg_cnt_ < img_msg_divider_)
+  {
+    return;
+  }
+  img_msg_cnt_                     = 0;
+  const std::string image_data_str = data["image"];
+  const std::string decoded        = base64_decode(image_data_str);
+  vector<uint8_t>   img_data(decoded.begin(), decoded.end());
+  cv::Mat           img_mat = cv::imdecode(cv::Mat(img_data), 1);
+  ROS_WARN("Image str:\n%s", image_data_str.c_str());
+  sensor_msgs::Image msg;
+  cv_bridge::CvImage im;
+  im.encoding = "rgb8";
+  im.image    = img_mat;
 }
 
 std::string RosBridge::get_waypoints_tcp_message() const

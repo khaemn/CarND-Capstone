@@ -32,7 +32,9 @@ public:
 
   geometry_msgs::TwistStamped parse_velocities(const nlohmann::json &data);
 
-  void handle_traffic_lights(const nlohmann::json &data);
+  void handle_traffic_lights(const nlohmann::json &data) const;
+
+  void handle_camera_image(const nlohmann::json &data) const;
 
   std::string get_waypoints_tcp_message() const;
 
@@ -54,6 +56,7 @@ private:
   ros::Publisher pose_pub_;
   ros::Publisher velocity_pub_;
   ros::Publisher trafficlight_pub_;
+  ros::Publisher image_pub_;
 
   ros::Subscriber final_wpts_sub_;
   ros::Subscriber steering_sub_;
@@ -66,6 +69,9 @@ private:
   double prev_yaw_ = INITIAL_YAW;
   double prev_angular_vel_ = 0.0;
   const double angular_velocity_filter_coeff_ = 10;
+
+  const uint8_t img_msg_divider_{50};
+  mutable uint8_t img_msg_cnt_ {0};
 
   // Storage for the waypoint coords to send to the simulator
   std::vector<double> wpt_xs_;

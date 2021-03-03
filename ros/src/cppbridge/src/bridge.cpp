@@ -70,7 +70,11 @@ int main(int argc, char **argv)
         }
 
         if (event == "trafficlights") {
-            rosbridge.handle_traffic_lights(j[1]);
+          rosbridge.handle_traffic_lights(j[1]);
+        }
+
+        if (event == "image") {
+          rosbridge.handle_camera_image(j[1]);
         }
 
         json msgJson;
