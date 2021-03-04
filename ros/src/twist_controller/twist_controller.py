@@ -36,6 +36,7 @@ class Controller(object):
         
         kp = 0.3; ki = 0.1; kd = 0.;
         self.min_allowed_throttle = 0.
+        self.min_eligible_throttle = 0.05
         max_allowed_throttle = 0.4
         self.throttle_controller = PID(kp, ki, kd, self.min_allowed_throttle, max_allowed_throttle)
         
@@ -48,6 +49,8 @@ class Controller(object):
         cutoff_freq_hz = 0.5
         self.speed_filter = LowPassFilter(cutoff_freq_hz, sample_time_sec)
         self.last_time = rospy.get_time()
+        self.brake_torque_nm = 0.
+        self.fullstop_brake_torque_nm = 700.
 
         # TODO: Implement
         pass
@@ -72,17 +75,21 @@ class Controller(object):
         throttle = self.throttle_controller.step(linear_velocity_error, time_passed)
 
         if desired_linear_vel < filtered_curr_linear_vel:
-            if throttle <= self.min_allowed_throttle:
-                brake = 700. # full stop
+            if throttle <= self.min_eligible_throttle and filtered_curr_linear_vel <= self.brake_deadband:
+                # gradual brake torque increase at full stop
+                self.brake_torque_nm = min(self.brake_torque_nm + 10., 
+                                           self.fullstop_brake_torque_nm)
             else:
                 #TODO: smooth deceleration using the wheel radius
-                brake = 200.
+                speed_delta_ms = desired_linear_vel - filtered_curr_linear_vel
+                self.brake_torque_nm = min(300., speed_delta_ms * speed_delta_ms)
         else:
-            brake = 0. 
+            self.brake_torque_nm = 0. 
             
         steering = self.yaw_controller.get_steering(
                         desired_linear_vel,
                         desired_angular_vel,
                         filtered_curr_linear_vel)
-
-        return throttle, brake, steering
+        rospy.logwarn("Status: spd %.2f, desired %.2f   Controls: thr %.2f  brk %.1f  steer %.2f",
+                    filtered_curr_linear_vel, desired_linear_vel, throttle, self.brake_torque_nm, steering)
+        return throttle, self.brake_torque_nm, steering
