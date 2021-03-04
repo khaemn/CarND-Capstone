@@ -49,7 +49,7 @@ class WaypointUpdater(object):
         self.loop()
         
     def loop(self):
-        rate = rospy.Rate(20)
+        rate = rospy.Rate(35)
         while not rospy.is_shutdown():
             if self.pose and self.base_waypoints:
                 self.publish_waypoints(self.get_closest_wpt_idx())
@@ -89,11 +89,24 @@ class WaypointUpdater(object):
         if no_red_traffic_light_ahead:
             lane.waypoints = self.base_waypoints.waypoints[closest_idx : farthest_idx]
         else:
-            # Decelerate (naiive)
+            # The stopping waypoint lies inside the car, so in order to not cross the
+            # stop line, the real wpt idx should be a bit smaller then the traffic wpt
+            stop_wpt_idx = self.traffic_wpt_idx - 2
+            waypoints_until_stop = stop_wpt_idx - closest_idx
+            current_speed = self.base_waypoints.waypoints[closest_idx].twist.twist.linear.x
+            #self.pose.twist.twist.linear.x
+
+            # Decelerate (naiive, supposes all wpts are spreaded evenly on equal distance)
+            speed_step = current_speed / waypoints_until_stop
+            cnt = 1
             for wpt in self.base_waypoints.waypoints[closest_idx : farthest_idx]:
                 new_wpt = wpt
-                new_wpt.twist.twist.linear.x = 0.
+                new_desired_spd_ms = max(0., current_speed - (speed_step * cnt))
+                if new_desired_spd_ms < 0.2:
+                    new_desired_spd_ms = 0.0
+                new_wpt.twist.twist.linear.x = new_desired_spd_ms
                 lane.waypoints.append(new_wpt)
+                cnt += 1
         self.final_waypoints_pub.publish(lane)
         # rospy.logwarn("Closest WPT: %d", closest_idx)
 
