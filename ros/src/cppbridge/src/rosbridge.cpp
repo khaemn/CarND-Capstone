@@ -200,16 +200,18 @@ void RosBridge::handle_camera_image(const nlohmann::json &data) const
   {
     return;
   }
-  img_msg_cnt_                     = 0;
-  const std::string image_data_str = data["image"];
-  const std::string decoded        = base64_decode(image_data_str);
-  vector<uint8_t>   img_data(decoded.begin(), decoded.end());
-  cv::Mat           img_mat = cv::imdecode(cv::Mat(img_data), 1);
-  ROS_WARN("Image str:\n%s", image_data_str.c_str());
-  sensor_msgs::Image msg;
-  cv_bridge::CvImage im;
-  im.encoding = "rgb8";
-  im.image    = img_mat;
+  img_msg_cnt_ = 0;
+
+  const std::string  image_data_str = data["image"];
+  const std::string  decoded        = base64_decode(image_data_str);
+  vector<uint8_t>    img_data(decoded.begin(), decoded.end());
+  cv_bridge::CvImage cv_image_wrapper;
+  cv_image_wrapper.encoding = "rgb8";
+  cv_image_wrapper.image    = cv::imdecode(cv::Mat(img_data), 1);
+  auto msg                  = cv_image_wrapper.toImageMsg();
+  msg->header.stamp         = ros::Time::now();
+  // NOTE: The image colorspace published is BGR!
+  image_pub_.publish(msg);
 }
 
 std::string RosBridge::get_waypoints_tcp_message() const
