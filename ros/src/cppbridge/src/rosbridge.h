@@ -70,7 +70,7 @@ private:
   double prev_angular_vel_ = 0.0;
   const double angular_velocity_filter_coeff_ = 10;
 
-  const uint8_t img_msg_divider_{20};
+  const uint8_t img_msg_divider_{3};
   mutable uint8_t img_msg_cnt_ {0};
 
   // Storage for the waypoint coords to send to the simulator
