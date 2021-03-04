@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import copy
 import rospy
 import numpy as np
 from geometry_msgs.msg import PoseStamped
@@ -25,7 +26,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 #Number of waypoints we will publish. You can change this number
-
+MAX_DECEL = 0.5
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -92,23 +93,28 @@ class WaypointUpdater(object):
             # The stopping waypoint lies inside the car, so in order to not cross the
             # stop line, the real wpt idx should be a bit smaller then the traffic wpt
             stop_wpt_idx = self.traffic_wpt_idx - 2
-            waypoints_until_stop = stop_wpt_idx - closest_idx
+            waypoints_until_stop = max(1, stop_wpt_idx - closest_idx)
             current_speed = self.base_waypoints.waypoints[closest_idx].twist.twist.linear.x
             #self.pose.twist.twist.linear.x
 
             # Decelerate (naiive, supposes all wpts are spreaded evenly on equal distance)
-            speed_step = current_speed / waypoints_until_stop
-            cnt = 1
-            for wpt in self.base_waypoints.waypoints[closest_idx : farthest_idx]:
-                new_wpt = wpt
-                new_desired_spd_ms = max(0., current_speed - (speed_step * cnt))
-                if new_desired_spd_ms < 0.2:
+            # speed_step = current_speed / waypoints_until_stop
+            final_candidates = self.base_waypoints.waypoints[closest_idx : farthest_idx]
+            for i, wpt in enumerate(final_candidates):
+                new_wpt = Waypoint()
+                new_wpt.pose = wpt.pose
+                dist = self.distance(final_candidates, i, waypoints_until_stop)
+                new_desired_spd_ms = math.sqrt(2 * MAX_DECEL * dist) #max(0., current_speed - (speed_step * i))
+                if new_desired_spd_ms < 1.0:
                     new_desired_spd_ms = 0.0
                 new_wpt.twist.twist.linear.x = new_desired_spd_ms
                 lane.waypoints.append(new_wpt)
-                cnt += 1
+
+            rospy.logwarn("Wpts until stop %d, next 30th wp speed  %.3f",
+                           waypoints_until_stop, lane.waypoints[30].twist.twist.linear.x)
         self.final_waypoints_pub.publish(lane)
-        # rospy.logwarn("Closest WPT: %d", closest_idx)
+        rospy.logwarn("Closest WPT: %d,  traflight wpt  %d,  no redlight: %r",
+                       closest_idx, self.traffic_wpt_idx, no_red_traffic_light_ahead)
 
     def pose_cb(self, msg):
         self.pose = msg
