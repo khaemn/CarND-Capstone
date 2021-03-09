@@ -85,10 +85,12 @@ class Controller(object):
             else:
                 #TODO: smooth deceleration using the wheel radius
                 speed_delta_ms = desired_linear_vel - filtered_curr_linear_vel
-                deceleration = max(speed_delta_ms, self.decel_limit)
-                self.brake_torque_nm = min(abs(deceleration) * self.vehicle_mass * self.wheel_radius,
-                                           self.fullstop_brake_torque_nm * 2)
-                #min(300., speed_delta_ms * speed_delta_ms)
+                if abs(speed_delta_ms) > desired_linear_vel * 0.1:
+                    deceleration = max(speed_delta_ms, self.decel_limit)
+                    self.brake_torque_nm = min(abs(deceleration) * self.vehicle_mass * self.wheel_radius,
+                                               self.fullstop_brake_torque_nm * 2)
+                else:
+                    self.brake_torque_nm = speed_delta_ms * speed_delta_ms
         else:
             self.brake_torque_nm = 0. 
             
