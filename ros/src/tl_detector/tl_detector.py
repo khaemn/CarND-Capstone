@@ -178,9 +178,9 @@ class TLDetector(object):
         masked = np.zeros(cv_image.shape)
         masked = cv2.bitwise_and(cv_image, cv_image, mask=mask)
         state = self.detect_state(masked)
-        cv2.imwrite("/home/rattus/Free/Udacity/CarND-Capstone/imgs/traffic/{:05d}-{:01d}-{:01d}.jpg"
-                        .format(self.dataset_img_counter, state, light.state),
-                    cv_image)
+        #cv2.imwrite("/home/rattus/Free/Udacity/CarND-Capstone/imgs/traffic/{:05d}-{:01d}-{:01d}.jpg"
+        #                .format(self.dataset_img_counter, state, light.state),
+        #            cv_image)
         self.dataset_img_counter += 1
 
         # TODO: use classifier instead of the simulator data
