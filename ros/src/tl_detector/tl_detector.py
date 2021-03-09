@@ -12,6 +12,7 @@ import sys
 import tf
 import cv2
 import yaml
+import numpy as np
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -53,6 +54,8 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
         self.lights_coord_tree = None
+        
+        self.dataset_img_counter = 0
 
         rospy.spin()
 
@@ -130,6 +133,30 @@ class TLDetector(object):
 
         return closest_idx
 
+    def clamp_saturation(self, img):
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        sat = hsv[:,:,1]
+        val = hsv[:,:,2]
+        mask = np.zeros(sat.shape)
+        mask[sat > 180] += 100
+        mask[val > 150] += 100
+        mask[mask < 200] = 0
+        mask[mask >= 200] = 1
+        return mask.astype(np.uint8)
+        
+    def detect_state(self, masked_light):
+        red_mean = masked_light[:,:,2].mean()
+        green_mean = masked_light[:,:,1].mean()
+        blue_mean = masked_light[:,:,0].mean()
+        red_green_diff_ratio = 1 / (abs(red_mean - green_mean) + 0.01)
+        non_blue_ratio = (red_mean + green_mean) / 2 * blue_mean
+        yellow_mean = red_green_diff_ratio * non_blue_ratio
+        # States: 0 - red, 1 - yellow, 2 - green, 4 - Unknown
+        indices = np.array([red_mean, yellow_mean, green_mean])
+        if (indices.max() < 0.1):
+            return TrafficLight.UNKNOWN
+        return indices.argmax()
+        
     def get_light_state(self, light):
         """Determines the current color of the traffic light
 
@@ -140,15 +167,24 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        # TODO: use classifier instead of the cimulator data
-        return light.state
 
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        #cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
+        mask = self.clamp_saturation(cv_image)
+        masked = np.zeros(cv_image.shape)
+        masked = cv2.bitwise_and(cv_image, cv_image, mask=mask)
+        state = self.detect_state(masked)
+        cv2.imwrite("/home/rattus/Free/Udacity/CarND-Capstone/imgs/traffic/{:05d}-{:01d}-{:01d}.jpg"
+                        .format(self.dataset_img_counter, state, light.state),
+                    cv_image)
+        self.dataset_img_counter += 1
 
+        # TODO: use classifier instead of the simulator data
+        return state # light.state
         #Get classification
         return self.light_classifier.get_classification(cv_image)
 
