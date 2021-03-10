@@ -206,7 +206,7 @@ void RosBridge::handle_camera_image(const nlohmann::json &data) const
   const std::string  decoded        = base64_decode(image_data_str);
   vector<uint8_t>    img_data(decoded.begin(), decoded.end());
   cv_bridge::CvImage cv_image_wrapper;
-  cv_image_wrapper.encoding = "rgb8";
+  cv_image_wrapper.encoding = "bgr8";
   cv_image_wrapper.image    = cv::imdecode(cv::Mat(img_data), 1);
   auto msg                  = cv_image_wrapper.toImageMsg();
   msg->header.stamp         = ros::Time::now();
