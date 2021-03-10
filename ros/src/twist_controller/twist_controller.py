@@ -98,6 +98,7 @@ class Controller(object):
                         desired_linear_vel,
                         desired_angular_vel,
                         filtered_curr_linear_vel)
-        rospy.logwarn("Vehicle: spd %.2f, desired %.2f   Controls: thr %.2f  brk %.1f  steer %.2f",
-                    filtered_curr_linear_vel, desired_linear_vel, throttle, self.brake_torque_nm, steering)
+        # TODO: removeme!
+        #rospy.logwarn("Vehicle: spd %.2f, desired %.2f   Controls: thr %.2f  brk %.1f  steer %.2f",
+        #            filtered_curr_linear_vel, desired_linear_vel, throttle, self.brake_torque_nm, steering)
         return throttle, self.brake_torque_nm, steering
