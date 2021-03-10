@@ -129,6 +129,9 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
+        if not self.base_wpt_tree:
+            return 0
+            
         closest_idx = self.base_wpt_tree.query([x, y], 1)[1]
 
         return closest_idx
@@ -198,7 +201,8 @@ class TLDetector(object):
 
         """
         light = None
-
+        if not self.base_waypoints:
+            return -1, TrafficLight.UNKNOWN
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
         if(self.pose):
