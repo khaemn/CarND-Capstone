@@ -12,7 +12,6 @@ import sys
 import tf
 import cv2
 import yaml
-import numpy as np
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -54,6 +53,7 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
         self.lights_coord_tree = None
+        self.misdetections = 0
 
         rospy.spin()
 
@@ -97,7 +97,8 @@ class TLDetector(object):
         self.has_image = True
         self.camera_image = msg
         light_wp, state = self.process_traffic_lights()
-        rospy.logerr("IMAGE received!  wpt idx  %d, lightstate  %r", light_wp, state)
+        # TODO: removeme!
+        # rospy.logwarn("IMAGE received!  wpt idx  %d, lightstate  %r", light_wp, state)
 
         '''
         Publish upcoming red lights at camera frequency.
@@ -133,30 +134,6 @@ class TLDetector(object):
         closest_idx = self.base_wpt_tree.query([x, y], 1)[1]
 
         return closest_idx
-
-    def clamp_saturation(self, img):
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        sat = hsv[:,:,1]
-        val = hsv[:,:,2]
-        mask = np.zeros(sat.shape)
-        mask[sat > 180] += 100
-        mask[val > 150] += 100
-        mask[mask < 200] = 0
-        mask[mask >= 200] = 1
-        return mask.astype(np.uint8)
-        
-    def detect_state(self, masked_light):
-        red_mean = masked_light[:,:,2].mean()
-        green_mean = masked_light[:,:,1].mean()
-        blue_mean = masked_light[:,:,0].mean()
-        red_green_diff_ratio = 1 / (abs(red_mean - green_mean) + 0.01)
-        non_blue_ratio = (red_mean + green_mean) / 2 * blue_mean
-        yellow_mean = red_green_diff_ratio * non_blue_ratio
-        # States: 0 - red, 1 - yellow, 2 - green, 4 - Unknown
-        indices = np.array([red_mean, yellow_mean, green_mean])
-        if (indices.max() < 0.1):
-            return TrafficLight.UNKNOWN
-        return indices.argmax()
         
     def get_light_state(self, light):
         """Determines the current color of the traffic light
@@ -174,15 +151,18 @@ class TLDetector(object):
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-        mask = self.clamp_saturation(cv_image)
-        masked = np.zeros(cv_image.shape)
-        masked = cv2.bitwise_and(cv_image, cv_image, mask=mask)
-        state = self.detect_state(masked)
-
-        # TODO: use classifier instead of the simulator data
-        return state # light.state
-        #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        
+        state = self.light_classifier.get_classification(cv_image)
+        
+        if (state != light.state) and (state != TrafficLight.UNKNOWN):
+            self.misdetections += 1
+            rospy.logerr("State wrong, detected %d, true is %d", state, light.state)
+            cv2.imwrite("light_classification/{:05d}-{:01d}-{:01d}.jpg"
+                        .format(self.misdetections, state, light.state),
+                        cv_image)
+            
+        
+        return state
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its

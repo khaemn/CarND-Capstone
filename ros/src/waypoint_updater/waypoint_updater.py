@@ -89,6 +89,9 @@ class WaypointUpdater(object):
                 self.traffic_wpt_idx < closest_idx or self.traffic_wpt_idx > farthest_idx
         if no_red_traffic_light_ahead:
             lane.waypoints = self.base_waypoints.waypoints[closest_idx : farthest_idx]
+            if farthest_idx >= len(self.base_waypoints.waypoints):
+                circled_wpts = farthest_idx - len(self.base_waypoints.waypoints)
+                lane.waypoints = lane.waypoints + self.base_waypoints.waypoints[:circled_wpts]
         else:
             # The stopping waypoint lies inside the car, so in order to not cross the
             # stop line, the real wpt idx should be a bit smaller then the traffic wpt
@@ -110,12 +113,7 @@ class WaypointUpdater(object):
                 new_wpt.twist.twist.linear.x = new_desired_spd_ms
                 lane.waypoints.append(new_wpt)
 
-            rospy.logwarn("Wpts until stop %d, next 30th wp speed  %.3f",
-                           waypoints_until_stop, lane.waypoints[30].twist.twist.linear.x)
         self.final_waypoints_pub.publish(lane)
-        # TODO: removeme!
-        # rospy.logwarn("Closest WPT: %d,  traflight wpt  %d,  no redlight: %r",
-        #                closest_idx, self.traffic_wpt_idx, no_red_traffic_light_ahead)
 
     def pose_cb(self, msg):
         self.pose = msg
