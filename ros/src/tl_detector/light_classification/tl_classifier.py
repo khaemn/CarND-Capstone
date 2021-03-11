@@ -4,10 +4,10 @@ import numpy as np
 
 class TLClassifier(object):
     def __init__(self):
-        self.saturation_threshold = 180
-        self.value_threshold = 150
-        self.matching_score = 100
-        self.color_majority_level = 0.1
+        self.saturation_threshold = 160
+        self.value_threshold = 200
+        self.matching_score = 50
+        self.color_majority_level = 0.15
         pass
 
     def brightly_colored_objects_mask(self, img):
@@ -48,8 +48,8 @@ class TLClassifier(object):
 
         # A "yellow" pixel is a pixel that is not "blue" and the one
         # with close values of red and green.
-        red_green_diff_ratio = 1 / (abs(red_mean - green_mean) + 0.01)
-        non_blue_ratio = (red_mean + green_mean) / 2 * blue_mean
+        red_green_diff_ratio = (red_mean + green_mean) / (abs(red_mean - green_mean)*2. + 0.01)
+        non_blue_ratio = max(0., (red_mean + green_mean) - (2. * blue_mean))
         yellow_mean = red_green_diff_ratio * non_blue_ratio
 
         # States: 0 - red, 1 - yellow, 2 - green, 4 - Unknown
