@@ -42,22 +42,31 @@ class TLClassifier(object):
         traffic light circles are left on a black background 
         Returns a red, yellow, green state if there is majority of
         non-black pixels of that colour, otherwise returns Unknown'''
-        red_mean = masked_light[:,:,2].mean()
-        green_mean = masked_light[:,:,1].mean()
-        blue_mean = masked_light[:,:,0].mean()
+        
+        # Only non-black (nonzero) pixels of the image influence on the state detection
+        nonzeros = np.nonzero(masked_light)
 
-        # A "yellow" pixel is a pixel that is not "blue" and the one
-        # with close values of red and green.
-        red_green_diff_ratio = (red_mean + green_mean) / (abs(red_mean - green_mean)*2. + 0.01)
-        non_blue_ratio = max(0., (red_mean + green_mean) - (2. * blue_mean))
-        yellow_mean = red_green_diff_ratio * non_blue_ratio
-
-        # States: 0 - red, 1 - yellow, 2 - green, 4 - Unknown
-        indices = np.array([red_mean, yellow_mean, green_mean])
-
-        if (indices.max() < self.color_majority_level):
+        if (len(nonzeros[0]) == 0):
             return TrafficLight.UNKNOWN
 
+        meaningful_pixels = masked_light[nonzeros[0], nonzeros[1], :]
+
+        red_mean = meaningful_pixels[:,2].mean()
+        green_mean = meaningful_pixels[:,1].mean()
+        blue_mean = meaningful_pixels[:,0].mean()
+
+        red_green_diff_ratio = (red_mean + green_mean) / (abs(red_mean - green_mean)*2. + 0.01)
+        non_blue_ratio = max(0., (red_mean + green_mean) - (2. * blue_mean))
+        #print("r-g, nonbl ", red_green_diff_ratio, non_blue_ratio)
+        yellow_mean = red_green_diff_ratio * non_blue_ratio
+        # States: 0 - red, 1 - yellow, 2 - green, 4 - Unknown
+        # print("R, G, B, Y : {:0.2f}, {:0.2f}, {:0.2f}, {:0.2f}"
+        #      .format(red_mean, green_mean, blue_mean, yellow_mean))
+              
+        # States: 0 - red, 1 - yellow, 2 - green, 4 - Unknown
+        indices = np.array([red_mean, yellow_mean, green_mean])
+        if (indices.max() < self.color_majority_level or indices.max() < blue_mean):
+            return TrafficLight.UNKNOWN
         return indices.argmax()
 
 
