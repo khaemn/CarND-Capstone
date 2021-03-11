@@ -107,7 +107,7 @@ class WaypointUpdater(object):
                 new_wpt = Waypoint()
                 new_wpt.pose = wpt.pose
                 dist = self.distance(final_candidates, i, waypoints_until_stop)
-                new_desired_spd_ms = math.sqrt(2 * MAX_DECEL * dist) #max(0., current_speed - (speed_step * i))
+                new_desired_spd_ms = math.sqrt(2 * MAX_DECEL * dist)
                 if new_desired_spd_ms < 1.0:
                     new_desired_spd_ms = 0.0
                 new_wpt.twist.twist.linear.x = new_desired_spd_ms

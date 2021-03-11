@@ -12,8 +12,7 @@ This System Integration project implements a software suite that could drive an 
 
 The system is based on the robotic operational system [ROS](https://www.ros.org/) and contains an ensemble of ROS nodes, performing various tasks for controlling the vehicle:
 
-[architecture]: ./imgs/final-project-ros-graph-v2.png "Vehicle control system ROS nodes"
-![][architecture]
+![architecture](./imgs/final-project-ros-graph-v2.png "Vehicle control system ROS nodes")
 
 #### Nodes
 
@@ -48,37 +47,135 @@ The bridge takes the commands from the `/vehicle/steering_cmd`, `/vehicle/thrott
 -------------------------------------------------
 
 ### Traffic light detection
+![](./imgs/tl-detector-ros-graph.png)
 
-My approach to:
-* tl_detector
-* dbw node and twist contr
-    twist brake force computing - throttle wiggle avoidance
-    lowpass filter for Yaw
-* wpt updater
-    why less wpts
-    frequency adjustment
+I have not implemented any neural network model, but instead developed a classic computer vision algorithm for detection of a traffic light state. The main reason is: there are many models that can detect the traffic light itself, such as MobilenetV1, YOLO, and others, so there is no need to reinvent the wheel here. Using such a pre-trained model, it is easy to aquire a bounding box around a traffic light, and, using the box as ROI, extract only the image of the traffic light itself.
+The camera in the simulator is directed upright, so usually the traffic light is the most intensively coloured object on a sky or mountains background:
 
-Detection (optional)
-* dataset gathering
-    from sim
-        photos, samples
-* image preprocessing (top part, colorization)
-    camera is watching the sky and never the road, thus it's ok
-* model architecture
-    opencv classifier, no models
-    describe the pictures (with illustrations of various techniques)
-    * any chance to make a real road photo?
-        yes, the demo illustration now available
-    
-    Video link:
-    https://youtu.be/qA7bLBL-geI
+[tl_sim_example_1]: ./imgs/traffic/baseline/00004.jpg "Simulator traffic light example"
+[tl_sim_example_2]: ./imgs/traffic/baseline/00046.jpg "Simulator traffic light example"
+[tl_sim_example_3]: ./imgs/traffic/baseline/00029.jpg "Simulator traffic light example"
+
+|![][tl_sim_example_1]|![][tl_sim_example_2]|![][tl_sim_example_3]|
+|:-------------------:|:-------------------:|:-------------------:| 
+
+This allows usage of a relatively simple approach to detect the state of the traffic light:
+1. Find the most intensively colored pixels
+2. Find the brightest pixels
+3. Combine the most colored *AND* the brightest pixels, forming a mask of the traffic light candidates
+4. Cut the rest pixels off the image
+5. Measure, what is the dominant color of the kept pixels, and if it corresponds to one of the [red, yellow, green] - the job is done, otherwise there is probably no traffic light in the picture, or its state couldn't be detected.
+
+To tune some parameters of this algorithm (saturation and value thresholds, maximum levels, etc.) I have gathered several dosens of the images, published by the simulator to the `/image_color` ROS topic, and also have found a dosen of the real traffic lights photos from Internet.
+
+The picture below shows (from left to right):
+* the original camera image
+* "saturation" channel of the camera image in HSV colorspace, thresholded
+* "value" channel of the camera image in HSV colorspace, thresholded
+* a weighted sum of the saturation and value channels
+* a cutting mask, where white pixels indicates the brightest AND most intensively colored ones
+* the resulting image, containing only the pixels of the traffic lights, and a detection label
+
+![detection_examples](./imgs/illustrations.jpg "Detection examples")
+
+This algorithm works not too bad even on the real-life traffic light images, if the traffic light itself is bright and saturated enough (with respect to its background). In the rows 14 and 16 of the image above (the last ones) there are misdetections, caused by presence of a large brightly colored areas along with the traffic light itself. With a camera, directed upwards, the problem, shown in row 16, should never happen. The problem in row 14 is very specific to a particular local laws, so unless a traffic light has a yellow bounding frame, the algorithm would still work fine.
+
+The exact code with detailed comments can be found in `ros/src/tl_detector/light_classification/tl_classifier.py`
 
 
-Rubric points:
-* The code is built successfully and connects to the simulator.
-* Waypoints are published to plan Carla’s route around the track.
-* Controller commands are published to operate Carla’s throttle, brake, and steering.
-* Successfully navigate the full track more than once.
+### Waypoint updater
+![](./imgs/waypoint-updater-ros-graph.png)
 
-Video? (....)
+As soon as there is a detected traffic light, the final waypoints can be updated. If there is a red traffic light ahead, the vehicle must smoothly decelerate and stop close to a corresponding stopline. Also, the vehicle must decelerate if there is an obstacle ahead, however the obstacle handling is out of scope of this project.
+
+To decelerate ant stop the vehicle, some of the final waypoints must have gradually decreasing (until zero) linear velocity but the waypoint updater does not have information about the current vehicle speed. So, instead of computing the speed difference between the current and desired speed, the waypoint updater computes only desired speed. The waypoint, that is the closest to a stopline, and all waypoints _after_ it (along the base waypoints predefined route direction) are assigned with a zero velocity. Each waypoint _back_ from the stopline waypoint is assigned with a linear velocity, proportional to the square root of a distance between this point and the stopline waypoint:
+
+```
+...
+    dist = self.distance(final_candidates, i, waypoints_until_stop)
+    new_desired_spd_ms = math.sqrt(2 * MAX_DECEL * dist)
+...
+```
+This way, some of the waypoints would get a velocity that is higher than the allowed driving speed, but it is not a problem as the waypoint follower node would take care of keeping the speed limit.
+
+The final waypoints are being updated with a frequency about 10Hz, and there are 100 waypoints generated in advance. I have performed several experiments using more waypoints and/or higher publishing frequency, but it only leads to more lags in the ROS functioning, so at the end of the day I have kept these values as the best.
+
+The code with some extra comments can be found in `ros/src/waypoint_loader/waypoint_loader.py`.
+
+
+### Twist controller
+![](./imgs/dbw-node-ros-graph.png)
+
+The twist controller class implements the functionality of the DBW node. It computes three control command values:
+
+###### Throttle
+
+The current linear velocity of the car is filtered with an instance of `LowPassFilter` in order to eliminate noise.
+The throttle PID controller gets the difference between the (filtered) current vehicle linear velocity and the desired one (given in the corresponding point of the final waypoints). If the desired speed is higher than the current, it means the throttle should be positive, and the exact value (in range 0 to 1.0) is being computed via the PID algorithm. I have limited the maximum allowed throttle value to 0.6 to avoid any agressive acceleration from a full stop.
+If the desired speed is less than the current one, but the difference is relatively small, the throttle should be set to 0, and the car would slowly decelerate due to friction and other energy dissipations.
+This way, while driving without obstacles, the vehicle speed is maintained only using a throttle control (e.g. without brakes) which guarantees a comfort smooth longitudinal movement.
+
+###### Brake
+
+If the desired speed is less than the current one and the difference is relatively large (especially when the desired speed is 0), the deceleration via constant power dissipation with zero throttle is not useful, and the brake force is applied to the vehicle's wheels.
+The brake torque is computed using a desired (safe) deceleration rate and the difference between velocities:
+```
+...
+    deceleration = max(speed_delta_ms, self.decel_limit)
+    self.brake_torque_nm = min(abs(deceleration) * self.vehicle_mass * self.wheel_radius,
+                               self.fullstop_brake_torque_nm)
+...
+```
+However, this dynamically changing torque value makes sense only during a smooth deceleration, when the car is still moving relatively fast.
+Due to the automatic transmission, the vehicle needs some decent amount of brake torque to stand still, even when the throttle is zero.
+So, in order to fully stop the car, that is already moving very slowly, the brake torque is just gradually increased:
+
+```
+while ...
+    self.brake_torque_nm = min(self.brake_torque_nm + 10., 
+                               self.fullstop_brake_torque_nm)
+   ...
+...
+```
+If the desired speed is larger than the current speed, the brake torque is always being set to 0.
+                                           
+###### Steering angle
+
+The steering angle must be set to some value, that, considering current linear velocity of the vehicle, would cause rotation of the vehicle's heading to a direction, that leads to the closest waypoint ahead. The necessary angular velocity is computed by the waypoint follower node and posted as a twist command.
+The exact value of the steering angle is then computed, based on the desired angular velocity and the current linear velocity of the vehicle, and also taking into account the wheel base af the car, by the `YawController` instance. As the current linear velocity is filtered, the yaw controller usually returns a decent angle value without unnecessary oscillations.
+
+
+The code of the twist controller class can be found in `ros/src/twist_controller/twist_controller.py`.
+
+
+
+## Known issues
+-------------------------------------------------
+#### Traffic light detection problems
+
+Unfortunately, the traffic light detection algorithm, described above, does not work at all with the images from the Udacity Car bag:
+
+[tl_bag_1]: ./imgs/traffic/bag/1.png
+[tl_bag_2]: ./imgs/traffic/bag/2.png
+
+|![][tl_bag_1]|![][tl_bag_2]|
+|:-----------:|:-----------:|
+
+Because the colors on the image are extremely bleached, the detection, based on colors, fails:
+
+[bag_examples]: ./imgs/bag_samples.jpg "Detection examples"
+![][bag_examples]
+
+Anyway, in the simulator the detection accuracy is quite close to 100%. I have tested the algorithm on several laps, and there were only a couple of misdetections, but they were caused only by a time gap between the actual traffic light state change and the moment of refreshing of the camera image.
+
+
+## Rubric points checklist
+
+* The code is built successfully and connects to the simulator - **done**
+* Waypoints are published to plan Carla’s route around the track - **done**
+* Controller commands are published to operate Carla’s throttle, brake, and steering - **done**
+* Successfully navigate the full track more than once - **done**
+
+A video recording of a successful lap in the simulator can be found [here](https://youtu.be/qA7bLBL-geI).
+
 
