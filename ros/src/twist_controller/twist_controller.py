@@ -37,8 +37,8 @@ class Controller(object):
         kp = 0.3; ki = 0.1; kd = 0.;
         self.min_allowed_throttle = 0.
         self.min_eligible_throttle = 0.05
-        max_allowed_throttle = 0.6
-        self.throttle_controller = PID(kp, ki, kd, self.min_allowed_throttle, max_allowed_throttle)
+        self.max_allowed_throttle = 0.6
+        self.throttle_controller = PID(kp, ki, kd, self.min_allowed_throttle, self.max_allowed_throttle)
         
         self.yaw_controller = YawController(self.wheel_base,
                                             self.steer_ratio,
@@ -48,6 +48,7 @@ class Controller(object):
         sample_time_sec = 0.02
         cutoff_freq_hz = 0.5
         self.speed_filter = LowPassFilter(cutoff_freq_hz, sample_time_sec)
+        self.break_filter = LowPassFilter(cutoff_freq_hz, sample_time_sec)
         self.last_time = rospy.get_time()
         self.brake_torque_nm = 0.
         self.fullstop_brake_torque_nm = 700.
@@ -73,24 +74,37 @@ class Controller(object):
         filtered_curr_linear_vel = self.speed_filter.filt(curr_linear_vel)
         linear_velocity_error = desired_linear_vel - filtered_curr_linear_vel
         throttle = self.throttle_controller.step(linear_velocity_error, time_passed)
-
+        
+        if filtered_curr_linear_vel < 5.:
+            # Prevent jerking on small speeds when slowly approaching a stopline
+            # or starting on a green light
+            throttle = min(throttle, self.max_allowed_throttle / 2.)
+            
+        speed_delta_ms = desired_linear_vel - filtered_curr_linear_vel
+        if (filtered_curr_linear_vel > 2.0) and (speed_delta_ms < desired_linear_vel * .1):
+            # Do not use throttle if the speed diff is negligible AND
+            # the car is already moving
+            throttle = 0.
+        
         if desired_linear_vel < filtered_curr_linear_vel:
-            if desired_linear_vel < filtered_curr_linear_vel * .5:
-                throttle = 0.
-            if throttle <= self.min_eligible_throttle \
-            and filtered_curr_linear_vel <= self.brake_deadband:
+            throttle = 0.
+            if filtered_curr_linear_vel <= self.brake_deadband:
                 # gradual brake torque increase at full stop
                 self.brake_torque_nm = min(self.brake_torque_nm + 10., 
                                            self.fullstop_brake_torque_nm)
             else:
-                #TODO: smooth deceleration using the wheel radius
-                speed_delta_ms = desired_linear_vel - filtered_curr_linear_vel
-                if abs(speed_delta_ms) > desired_linear_vel * 0.1:
-                    deceleration = max(speed_delta_ms, self.decel_limit)
-                    self.brake_torque_nm = min(abs(deceleration) * self.vehicle_mass * self.wheel_radius,
-                                               self.fullstop_brake_torque_nm)
-                else:
-                    self.brake_torque_nm = speed_delta_ms * speed_delta_ms
+                deceleration = max(speed_delta_ms, self.decel_limit)
+                self.brake_torque_nm = min(abs(deceleration) * self.vehicle_mass * self.wheel_radius,
+                                           self.fullstop_brake_torque_nm * 2.)
+                if (abs(speed_delta_ms) < desired_linear_vel * 0.2) \
+                    or filtered_curr_linear_vel < 3.0:
+                    # When the difference is not big OR the current speed is already small
+                    # the brake torque could be decreased, to achieve smoother deceleration
+                    self.brake_torque_nm = self.break_filter.filt(self.brake_torque_nm) * 0.4
+                elif abs(speed_delta_ms) < desired_linear_vel * 0.05:
+                    # If the speed delta is really tiny, deceleration can be done
+                    # using only passive power dissipation without applying brake force
+                    self.brake_torque_nm = 0.
         else:
             self.brake_torque_nm = 0. 
             
@@ -99,6 +113,6 @@ class Controller(object):
                         desired_angular_vel,
                         filtered_curr_linear_vel)
         # TODO: removeme!
-        #rospy.logwarn("Vehicle: spd %.2f, desired %.2f   Controls: thr %.2f  brk %.1f  steer %.2f",
-        #            filtered_curr_linear_vel, desired_linear_vel, throttle, self.brake_torque_nm, steering)
+        rospy.logwarn("Vehicle: spd %.2f, desired %.2f   Controls: thr %.2f  brk %.1f  steer %.2f",
+                    filtered_curr_linear_vel, desired_linear_vel, throttle, self.brake_torque_nm, steering)
         return throttle, self.brake_torque_nm, steering
