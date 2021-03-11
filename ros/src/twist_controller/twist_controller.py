@@ -88,7 +88,7 @@ class Controller(object):
                 if abs(speed_delta_ms) > desired_linear_vel * 0.1:
                     deceleration = max(speed_delta_ms, self.decel_limit)
                     self.brake_torque_nm = min(abs(deceleration) * self.vehicle_mass * self.wheel_radius,
-                                               self.fullstop_brake_torque_nm * 2)
+                                               self.fullstop_brake_torque_nm)
                 else:
                     self.brake_torque_nm = speed_delta_ms * speed_delta_ms
         else:
