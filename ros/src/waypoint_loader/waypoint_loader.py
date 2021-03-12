@@ -54,8 +54,11 @@ class WaypointLoader(object):
                 p.twist.twist.linear.x = float(self.velocity)
 
                 waypoints.append(p)
-        return waypoints
+        # (vhavrylov) : the car is able to commute more than 1 lap
+        # only if I disable deceleration at the end of the waypoint
+        # list
         #return self.decelerate(waypoints)
+        return waypoints
 
     def distance(self, p1, p2):
         x, y, z = p1.x - p2.x, p1.y - p2.y, p1.z - p2.z
