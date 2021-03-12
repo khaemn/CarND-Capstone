@@ -97,8 +97,6 @@ class TLDetector(object):
         self.has_image = True
         self.camera_image = msg
         light_wp, state = self.process_traffic_lights()
-        # TODO: removeme!
-        rospy.logerr("IMAGE received!  wpt idx  %d, lightstate  %r", light_wp, state)
 
         '''
         Publish upcoming red lights at camera frequency.

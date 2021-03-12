@@ -105,8 +105,7 @@ class WaypointUpdater(object):
             waypoints_until_stop = max(0, stop_wpt_idx - closest_idx)
 
             final_candidates = self.base_waypoints.waypoints[closest_idx : farthest_idx]
-            rospy.logwarn("curr wp %d, tl wp %d, wpts_ahead %d",
-                            closest_idx, self.traffic_wpt_idx, waypoints_until_stop)
+
             for i, wpt in enumerate(final_candidates):
                 new_wpt = Waypoint()
                 new_wpt.pose = wpt.pose

@@ -81,10 +81,6 @@ class Controller(object):
             throttle = min(throttle, self.max_allowed_throttle / 2.)
             
         speed_delta_ms = desired_linear_vel - filtered_curr_linear_vel
-        if (filtered_curr_linear_vel > 2.0) and (speed_delta_ms < desired_linear_vel * .1):
-            # Do not use throttle if the speed diff is negligible AND
-            # the car is already moving
-            throttle = 0.
         
         if desired_linear_vel < filtered_curr_linear_vel:
             throttle = 0.
@@ -112,7 +108,5 @@ class Controller(object):
                         desired_linear_vel,
                         desired_angular_vel,
                         filtered_curr_linear_vel)
-        # TODO: removeme!
-        rospy.logwarn("Vehicle: spd %.2f, desired %.2f   Controls: thr %.2f  brk %.1f  steer %.2f",
-                    filtered_curr_linear_vel, desired_linear_vel, throttle, self.brake_torque_nm, steering)
+
         return throttle, self.brake_torque_nm, steering
