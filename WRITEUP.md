@@ -53,9 +53,9 @@ The bridge takes the commands from the `/vehicle/steering_cmd`, `/vehicle/thrott
 I have not implemented any neural network model, but instead developed a classic computer vision algorithm for detection of a traffic light state. The main reason is: there are many models that can detect the traffic light itself, such as MobilenetV1, YOLO, and others, so there is no need to reinvent the wheel here. Using such a pre-trained model, it is easy to aquire a bounding box around a traffic light, and, using the box as ROI, extract only the image of the traffic light itself.
 The camera in the simulator is directed upright, so usually the traffic light is the most intensively coloured object on a sky or mountains background:
 
-[tl_sim_example_1]: ./imgs/traffic/baseline/00004.jpg "Simulator traffic light example"
-[tl_sim_example_2]: ./imgs/traffic/baseline/00046.jpg "Simulator traffic light example"
-[tl_sim_example_3]: ./imgs/traffic/baseline/00029.jpg "Simulator traffic light example"
+[tl_sim_example_1]: ./imgs/traffic/baseline/00050-4-0.jpg "Simulator traffic light example"
+[tl_sim_example_2]: ./imgs/traffic/baseline/00005-0-0.jpg "Simulator traffic light example"
+[tl_sim_example_3]: ./imgs/traffic/baseline/00061-2-2.jpg "Simulator traffic light example"
 
 |![][tl_sim_example_1]|![][tl_sim_example_2]|![][tl_sim_example_3]|
 |:-------------------:|:-------------------:|:-------------------:| 
