@@ -183,6 +183,7 @@ Also there is a problem with the picture quality in the simulator - with low gra
 * Controller commands are published to operate Carla’s throttle, brake, and steering - **done**
 * Successfully navigate the full track more than once - **done**
 
-A video recording of a successful lap in the simulator can be found [here](https://youtu.be/qA7bLBL-geI).
+A video recording of a single successful lap with usual car speed in the simulator can be found [here](https://youtu.be/qA7bLBL-geI).
+A video recording of a successful lap (a bit more than one) with higher car speed in the simulator can be found [here](https://youtu.be/HE3F1rpeWiM).
 
 
