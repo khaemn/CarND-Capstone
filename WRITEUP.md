@@ -91,7 +91,7 @@ The exact code with detailed comments can be found in `ros/src/tl_detector/light
 ### Waypoint updater
 ![](./imgs/waypoint-updater-ros-graph.png)
 
-As soon as there is a detected traffic light, the final waypoints can be updated. If there is a red traffic light ahead, the vehicle must smoothly decelerate and stop close to a corresponding stopline. Also, the vehicle must decelerate if there is an obstacle ahead, however the obstacle handling is out of scope of this project.
+As soon as there is a detected traffic light, the final waypoints can be updated. If there is a red traffic light ahead, the vehicle must smoothly decelerate and stop close to a corresponding stopline. If there is a yellow traffic light ahead, the vehicle should start deceleration as well, as in the provided environment the yellow light is always immediately followed by a red light. Also, the vehicle must decelerate if there is an obstacle ahead, however the obstacle handling is out of scope of this project.
 
 To decelerate ant stop the vehicle, some of the final waypoints must have gradually decreasing (until zero) linear velocity but the waypoint updater does not have information about the current vehicle speed. So, instead of computing the speed difference between the current and desired speed, the waypoint updater computes only desired speed. The waypoint, that is the closest to a stopline, and all waypoints _after_ it (along the base waypoints predefined route direction) are assigned with a zero velocity. Each waypoint _back_ from the stopline waypoint is assigned with a linear velocity, proportional to the square root of a distance between this point and the stopline waypoint:
 
